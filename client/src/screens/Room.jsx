@@ -10,6 +10,7 @@ const RoomPage = () => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]); // State to store chat messages
   const [receivedFiles, setReceivedFiles] = useState([]);
+  const [sendingFiles, setSendingFiles] = useState([]); // Track files being sent
 
   const myVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -23,51 +24,100 @@ const RoomPage = () => {
     ]);
   };
 
-const handleReceivedFile = useCallback((data) => {
-  // Check if data is a string (metadata) or ArrayBuffer (file data)
-  if (typeof data === "string") {
-    // Attempt to parse it as JSON metadata
-    try {
-      const metadata = JSON.parse(data);
-      if (metadata.fileName && metadata.fileSize) {
-        setReceivedFiles((prev) => [
-          ...prev,
-          {
-            url: null,
-            name: metadata.fileName,
-            size: metadata.fileSize,
-            receivedData: [],
-          },
-        ]);
-        return;
+  const handleReceivedFile = useCallback((data) => {
+    // Check if data is a string (metadata) or ArrayBuffer (file data)
+    if (typeof data === "string") {
+      // Attempt to parse it as JSON metadata
+      try {
+        const metadata = JSON.parse(data);
+        if (metadata.fileName && metadata.fileSize) {
+          setReceivedFiles((prev) => [
+            ...prev,
+            {
+              url: null,
+              name: metadata.fileName,
+              size: metadata.fileSize,
+              receivedData: [],
+              receivedSize: 0, // Track received bytes
+              progress: 0, // Track progress percentage
+            },
+          ]);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to parse metadata:", e);
       }
-    } catch (e) {
-      console.error("Failed to parse metadata:", e);
+    } else if (data instanceof ArrayBuffer) {
+      // Add binary data (file chunk) to the last file entry in receivedFiles
+      setReceivedFiles((prev) => {
+        const lastFileIndex = prev.length - 1;
+        if (lastFileIndex >= 0) {
+          const updatedFiles = [...prev];
+          const lastFile = { ...updatedFiles[lastFileIndex] };
+
+          // Add the new chunk
+          lastFile.receivedData.push(data);
+
+          // Update received size and progress
+          const chunkSize = data.byteLength;
+          lastFile.receivedSize = (lastFile.receivedSize || 0) + chunkSize;
+          lastFile.progress = Math.round(
+            (lastFile.receivedSize / lastFile.size) * 100
+          );
+
+          updatedFiles[lastFileIndex] = lastFile;
+          return updatedFiles;
+        }
+        return prev;
+      });
     }
-  } else if (data instanceof ArrayBuffer) {
-    // Add binary data (file chunk) to the last file entry in receivedFiles
-    setReceivedFiles((prev) => {
-      const lastFile = prev[prev.length - 1];
-      if (lastFile) {
-        lastFile.receivedData.push(data);
-        return [...prev];
-      }
-      return prev;
-    });
-  }
-}, []);
-
-
+  }, []);
 
   useEffect(() => {
     return () => {
-      receivedFiles.forEach((fileUrl) => URL.revokeObjectURL(fileUrl));
+      receivedFiles.forEach((file) => {
+        if (file.url) URL.revokeObjectURL(file.url);
+      });
     };
   }, [receivedFiles]);
 
-  // Instantiate PeerServices with the callback for receiving messages
+  // Handle file sending progress
+  const handleFileSendProgress = useCallback(
+    (fileName, sentBytes, totalBytes) => {
+      setSendingFiles((prev) => {
+        const fileIndex = prev.findIndex((f) => f.name === fileName);
+
+        if (fileIndex >= 0) {
+          const updatedFiles = [...prev];
+          updatedFiles[fileIndex] = {
+            ...updatedFiles[fileIndex],
+            sentBytes,
+            progress: Math.round((sentBytes / totalBytes) * 100),
+          };
+          return updatedFiles;
+        } else {
+          return [
+            ...prev,
+            {
+              name: fileName,
+              size: totalBytes,
+              sentBytes,
+              progress: Math.round((sentBytes / totalBytes) * 100),
+            },
+          ];
+        }
+      });
+    },
+    []
+  );
+
+  // Instantiate PeerServices with the callbacks
   const [peer] = useState(
-    new PeerServices(handleReceivedMessage, handleReceivedFile)
+    new PeerServices(
+      handleReceivedMessage,
+      handleReceivedFile,
+      handleFileSendProgress
+    )
   );
 
   const addMessage = (text, fromSelf) => {
@@ -243,7 +293,43 @@ const handleReceivedFile = useCallback((data) => {
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) peer.sendFile(file);
+    if (file) {
+      // Add the file to sending files list with initial progress of 0%
+      setSendingFiles((prev) => [
+        ...prev,
+        {
+          name: file.name,
+          size: file.size,
+          sentBytes: 0,
+          progress: 0,
+        },
+      ]);
+
+      peer.sendFile(file);
+    }
+  };
+
+  // Progress bar component
+  const ProgressBar = ({ progress }) => {
+    return (
+      <div
+        style={{
+          width: "100%",
+          backgroundColor: "#e0e0e0",
+          borderRadius: "4px",
+          margin: "5px 0",
+        }}>
+        <div
+          style={{
+            height: "10px",
+            width: `${progress}%`,
+            backgroundColor: "#4CAF50",
+            borderRadius: "4px",
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+    );
   };
 
   return (
@@ -315,20 +401,65 @@ const handleReceivedFile = useCallback((data) => {
             <h2>File Sharing</h2>
             <input type="file" onChange={handleFileSelect} />
           </div>
+
+          {/* Sending Files Progress Section */}
+          {sendingFiles.length > 0 && (
+            <div>
+              <h3>Sending Files</h3>
+              {sendingFiles.map((file, index) => (
+                <div key={`sending-${index}`} style={{ margin: "10px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}>
+                    <span>{file.name}</span>
+                    <span>{file.progress}%</span>
+                  </div>
+                  <ProgressBar progress={file.progress} />
+                  {file.progress === 100 && (
+                    <span style={{ color: "green" }}>Sent successfully!</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Received Files Section */}
           <div>
             <h3>Received Files</h3>
             {receivedFiles.map((file, index) => {
-              if (file.receivedData) {
+              // Create file URL for completed transfers
+              let fileUrl = file.url;
+              if (!fileUrl && file.receivedData && file.progress === 100) {
                 const fileBlob = new Blob(file.receivedData);
-                const fileUrl = URL.createObjectURL(fileBlob);
-                return (
-                  <div key={index}>
+                fileUrl = URL.createObjectURL(fileBlob);
+                // Update the file object with the URL
+                setReceivedFiles((prev) => {
+                  const updated = [...prev];
+                  updated[index] = { ...updated[index], url: fileUrl };
+                  return updated;
+                });
+              }
+
+              return (
+                <div key={`receiving-${index}`} style={{ margin: "10px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                    }}>
+                    <span>{file.name}</span>
+                    <span>{file.progress || 0}%</span>
+                  </div>
+                  <ProgressBar progress={file.progress || 0} />
+                  {fileUrl && (
                     <a href={fileUrl} download={file.name}>
                       Download {file.name}
                     </a>
-                  </div>
-                );
-              }
+                  )}
+                </div>
+              );
             })}
           </div>
         </div>
