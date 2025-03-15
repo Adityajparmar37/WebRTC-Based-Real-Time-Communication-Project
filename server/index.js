@@ -3,7 +3,15 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const io = new Server(process.env.PORT, {
-  cors: "*",
+  cors: {
+    origin: [
+      "https://webrtc-project-gamma.vercel.app",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
+  },
 });
 
 const emailToSocketIdMap = new Map();
