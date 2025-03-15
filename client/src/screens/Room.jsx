@@ -336,7 +336,9 @@ const RoomPage = () => {
     <div>
       <h1>Room Page</h1>
       <h2>{remoteSocketId ? "Connected" : "No one in room"}</h2>
-      {remoteSocketId && <button onClick={handleUserCall}>Call</button>}
+      {remoteSocketId && (
+        <button onClick={handleUserCall}>Incomming - Call</button>
+      )}
       <div>
         <h1>My Stream</h1>
         <video
