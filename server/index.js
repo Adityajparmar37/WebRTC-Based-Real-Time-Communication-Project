@@ -3,7 +3,7 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const io = new Server(process.env.PORT, {
-  cors: true,
+  cors: "*",
 });
 
 const emailToSocketIdMap = new Map();
