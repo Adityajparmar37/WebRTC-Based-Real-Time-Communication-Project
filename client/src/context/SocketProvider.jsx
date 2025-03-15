@@ -11,9 +11,11 @@ export const useSocket = () => {
   return socket;
 };
 
+console.log(import.meta.env.VITE_API_BASE_URL);
+
 // Provider function to provide socketContext value to children
 export const SocketProvider = ({ children }) => {
-  const socket = useMemo(() => io("localhost:8000"), []);
+  const socket = useMemo(() => io(import.meta.env.VITE_API_BASE_URL), []);
   return (
     <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
   );
