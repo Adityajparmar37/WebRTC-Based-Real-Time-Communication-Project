@@ -5,7 +5,7 @@ dotenv.config();
 const io = new Server(process.env.PORT, {
   cors: {
     origin: [
-      "https://webrtc-project-gamma.vercel.app",
+      "https://webrtc-based-real-time-communication-tout.onrender.com",
       "http://localhost:3000",
     ],
     methods: ["GET", "POST"],
