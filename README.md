@@ -6,7 +6,7 @@ This project enables real-time communication between users through video and aud
 
 [`https://webrtc-based-real-time-communication.onrender.com`](https://webrtc-based-real-time-communication.onrender.com)
 
-## NOTE: DO WAIT FOR 1 - 3 min in order to exchange offers between two parties hence it might take few mintues to have video and audio of other end party  
+**NOTE: DO WAIT FOR 1 - 3 min in order to exchange offers between two parties hence it might take few mintues to have video and audio of other end party**  
 
 ## 📜 Features
 
